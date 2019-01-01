@@ -7,7 +7,7 @@ extern crate crossbeam_channel as chan;
 extern crate libc;
 extern crate pbr;
 extern crate stopwatch;
-extern crate sys_info;
+extern crate num_cpus;
 
 mod cpu_hasher;
 #[cfg(feature = "opencl")]
@@ -227,7 +227,7 @@ fn main() {
     };
 
     // work out number of cpu threads to use
-    let cores = sys_info::cpu_num().unwrap() as u8;
+    let cores = num_cpus::get() as u8;
     let cpu_threads = if cpu_threads == 0 {
         cores
     } else {

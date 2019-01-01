@@ -2,7 +2,8 @@ extern crate humanize_rs;
 extern crate pbr;
 extern crate raw_cpuid;
 extern crate rayon;
-extern crate sys_info;
+extern crate systemstat;
+extern crate num_cpus;
 
 use self::humanize_rs::bytes::Bytes;
 use self::pbr::{MultiBar, Units};
@@ -18,6 +19,7 @@ use std::process;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use stopwatch::Stopwatch;
+use self::systemstat::{System, Platform};
 use utils::free_disk_space;
 use utils::get_sector_size;
 use utils::preallocate;
@@ -77,11 +79,12 @@ impl Plotter {
     }
 
     pub fn run(self, mut task: PlotterTask) {
+        let sys = System::new();
         let cpuid = CpuId::new();
         let cpu_name = cpuid.get_extended_function_info().unwrap();
         let cpu_name = cpu_name.processor_brand_string().unwrap().trim();
-        let cores = sys_info::cpu_num().unwrap();
-        let memory = sys_info::mem_info().unwrap();
+        let cores = num_cpus::get();
+        let memory = sys.memory().unwrap();;
 
         let simd_ext = detect_simd();
 
@@ -180,8 +183,8 @@ impl Plotter {
         if !task.quiet {
             println!(
                 "RAM: Total={:.2} GiB, Free={:.2} GiB, Usage={:.2} GiB",
-                memory.total as f64 / 1024.0 / 1024.0,
-                memory.free as f64 / 1024.0 / 1024.0,
+                memory.total.as_usize() as f64 / 1024.0 / 1024.0 / 1024.0,
+                memory.free.as_usize() as f64 / 1024.0 / 1024.0 / 1024.0,
                 (mem + gpu_mem_needed) as f64 / 1024.0 / 1024.0 / 1024.0
             );
 
@@ -367,7 +370,7 @@ impl Plotter {
 
 fn calculate_mem_to_use(
     task: &PlotterTask,
-    memory: &sys_info::MemInfo,
+    memory: &systemstat::data::Memory,
     nonces_per_sector: u64,
     gpu: bool,
     gpu_mem_needed: u64,
@@ -411,7 +414,7 @@ fn calculate_mem_to_use(
     };
 
     // don't exceed free memory and leave some elbow room 1-1000/1024
-    mem = min(mem, memory.free * 1000 - gpu_mem_needed);
+    mem = min(mem, (memory.free.as_usize() as u64 - gpu_mem_needed) * 1000 / 1024);
 
     // rounding single/double buffer
     let num_buffer = if task.async_io { 2 } else { 1 };
